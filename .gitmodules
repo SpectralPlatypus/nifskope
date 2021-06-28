@@ -10,3 +10,6 @@
 [submodule "lib/gli"]
 	path = lib/gli
 	url = https://github.com/g-truc/gli.git
+[submodule "lib/v-hacd"]
+	path = lib/v-hacd
+	url = https://github.com/kmammou/v-hacd

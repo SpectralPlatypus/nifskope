@@ -3,6 +3,7 @@
 
 #include "glview.h"
 
+#include <QAction>
 
 // Slider lambda
 auto sld = []( QSlider * slider, int min, int max, int val ) {

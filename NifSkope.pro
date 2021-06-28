@@ -13,11 +13,8 @@ contains(QT_VERSION, ^5\\.[0-6]\\..*) {
 	error("Minimum required version is Qt 5.7")
 }
 
-# C++11/14 Support
-CONFIG += c++14
-
 # Dependencies
-CONFIG += nvtristrip qhull zlib lz4 fsengine gli
+CONFIG += nvtristrip qhull zlib lz4 fsengine gli v-hacd
 
 # Debug/Release options
 CONFIG(debug, debug|release) {
@@ -330,15 +327,23 @@ nvtristrip {
 }
 
 qhull {
-    !*msvc*:QMAKE_CFLAGS += -isystem ../nifskope/lib/qhull/src
-    !*msvc*:QMAKE_CXXFLAGS += -isystem ../nifskope/lib/qhull/src
-    else:INCLUDEPATH += lib/qhull/src
+    INCLUDEPATH += lib/qhull/src
     HEADERS += $$files($$PWD/lib/qhull/src/libqhull/*.h, false)
 }
 
+v-hacd {
+    INCLUDEPATH += \
+        lib/v-hacd/src/VHACD_Lib/inc  \
+        lib/v-hacd/src/VHACD_Lib/public
+    HEADERS += lib/v-hacd/src/VHACD_Lib/public/VHACD.h
+    HEADERS += $$files($$PWD/lib/v-hacd/src/VHACD_Lib/inc/*.h, false)
+    HEADERS += $$files($$PWD/lib/v-hacd/src/VHACD_Lib/inc/*.inl, false)
+    SOURCES += $$files($$PWD/lib/v-hacd/src/VHACD_Lib/src/*.cpp, false)
+    SOURCES += $$files($$PWD/lib/v-hacd/src/VHACD_Lib/src/*.inl, false)
+}
+
 gli {
-    !*msvc*:QMAKE_CXXFLAGS += -isystem ../nifskope/lib/gli/gli -isystem ../nifskope/lib/gli/external
-    else:INCLUDEPATH += lib/gli/gli lib/gli/external
+    INCLUDEPATH += lib/gli/gli lib/gli/external
     HEADERS += $$files($$PWD/lib/gli/gli/*.hpp, true)
     HEADERS += $$files($$PWD/lib/gli/gli/*.inl, true)
     HEADERS += $$files($$PWD/lib/gli/external/glm/*.hpp, true)
@@ -346,9 +351,7 @@ gli {
 }
 
 zlib {
-    !*msvc*:QMAKE_CFLAGS += -isystem ../nifskope/lib/zlib
-    !*msvc*:QMAKE_CXXFLAGS += -isystem ../nifskope/lib/zlib
-    else:INCLUDEPATH += lib/zlib
+    INCLUDEPATH += lib/zlib
     HEADERS += $$files($$PWD/lib/zlib/*.h, false)
     SOURCES += $$files($$PWD/lib/zlib/*.c, false)
 }
@@ -474,7 +477,8 @@ build_pass|!debug_and_release {
 
 win32:contains(QT_ARCH, i386) {
 	DEP += \
-		dep/NifMopp.dll
+            dep/NifMopp.dll \
+            dep/MoppGen.dll
 	copyFiles( $$DEP )
 }
 
@@ -547,3 +551,8 @@ buildMessages:build_pass|buildMessages:!debug_and_release {
 }
 
 # vim: set filetype=config : 
+
+DISTFILES += \
+    lib/v-hacd/src/VHACD_Lib/CMakeLists.txt \
+    lib/v-hacd/src/VHACD_Lib/cl/vhacdKernels.cl \
+    lib/v-hacd/src/VHACD_Lib/cmake/vhacd-config.cmake
