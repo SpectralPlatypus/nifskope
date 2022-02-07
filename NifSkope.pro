@@ -165,6 +165,7 @@ HEADERS += \
 	src/model/nifproxymodel.h \
 	src/model/undocommands.h \
 	src/spells/blocks.h \
+	src/spells/havok.h \
 	src/spells/mesh.h \
 	src/spells/misc.h \
 	src/spells/sanitize.h \

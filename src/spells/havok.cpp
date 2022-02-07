@@ -2,6 +2,8 @@
 
 #include "spells/blocks.h"
 
+#include "havok.h"
+
 #include "lib/nvtristripwrapper.h"
 #include "lib/qhull.h"
 #include "v-hacd/src/VHACD_Lib/public/VHACD.h"
@@ -16,7 +18,7 @@
 #include <QComboBox>
 
 #include <algorithm> // std::sort
-
+#include <optional> // std::optional
 
 // Brief description is deliberately not autolinked to class Spell
 /*! \file havok.cpp
@@ -27,10 +29,117 @@
 
 //! For Havok coordinate transforms
 static const float havokConst = 7.0;
+struct CVSResult
+{
+public:
+    QVector<Vector4> Verts;
+    QVector<Vector4> Norms;
+    float CollRadius;
+
+
+    CVSResult(QVector<Vector4>&& v, QVector<Vector4>&& n, float cr) :
+        Verts {std::move(v)},
+        Norms {std::move(n)},
+        CollRadius {cr}
+    {}
+};
+
+std::optional<CVSResult> createCVS(const QVector<Vector3>& verts, float havokScale)
+{
+    /* those will be filled with the CVS data */
+    QVector<Vector4> convex_verts, convex_norms;
+
+
+    // to store results
+    QVector<Vector4> hullVerts, hullNorms;
+
+    // ask for precision
+    QDialog dlg;
+    QVBoxLayout * vbox = new QVBoxLayout;
+    dlg.setLayout( vbox );
+
+    vbox->addWidget( new QLabel( Spell::tr( "Enter the maximum roundoff error to use" ) ) );
+    vbox->addWidget( new QLabel( Spell::tr( "Larger values will give a less precise but better performing hull" ) ) );
+
+    QDoubleSpinBox * precSpin = new QDoubleSpinBox;
+    precSpin->setRange( 0, 5 );
+    precSpin->setDecimals( 3 );
+    precSpin->setSingleStep( 0.01 );
+    precSpin->setValue( 0.25 );
+    vbox->addWidget( precSpin );
+
+    vbox->addWidget( new QLabel( Spell::tr( "Collision Radius" ) ) );
+
+    QDoubleSpinBox * spnRadius = new QDoubleSpinBox;
+    spnRadius->setRange( 0, 0.5 );
+    spnRadius->setDecimals( 4 );
+    spnRadius->setSingleStep( 0.001 );
+    spnRadius->setValue( 0.05 );
+    vbox->addWidget( spnRadius );
+
+    QHBoxLayout * hbox = new QHBoxLayout;
+    vbox->addLayout( hbox );
+
+    QPushButton * ok = new QPushButton;
+    ok->setText( Spell::tr( "Ok" ) );
+    hbox->addWidget( ok );
+
+    QPushButton * cancel = new QPushButton;
+    cancel->setText( Spell::tr( "Cancel" ) );
+    hbox->addWidget( cancel );
+
+    QObject::connect( ok, &QPushButton::clicked, &dlg, &QDialog::accept );
+    QObject::connect( cancel, &QPushButton::clicked, &dlg, &QDialog::reject );
+
+    if ( dlg.exec() != QDialog::Accepted ) {
+        return std::nullopt;
+    }
+
+    /* make a convex hull from it */
+    compute_convex_hull( verts, hullVerts, hullNorms, (float)precSpin->value() );
+
+    // sort and remove duplicate vertices
+    QList<Vector4> sortedVerts;
+    for ( Vector4 vert : hullVerts ) {
+        vert /= havokScale;
+
+        if ( !sortedVerts.contains( vert ) ) {
+            sortedVerts.append( vert );
+        }
+    }
+    std::sort( sortedVerts.begin(), sortedVerts.end(), Vector4::lexLessThan );
+    QListIterator<Vector4> vertIter( sortedVerts );
+
+    while ( vertIter.hasNext() ) {
+        Vector4 sorted = vertIter.next();
+        convex_verts.append( sorted );
+    }
+
+    // sort and remove duplicate normals
+    QList<Vector4> sortedNorms;
+    for ( Vector4 norm : hullNorms ) {
+        norm = Vector4( Vector3( norm ), norm[3] / havokScale );
+
+        if ( !sortedNorms.contains( norm ) ) {
+            sortedNorms.append( norm );
+        }
+    }
+    std::sort( sortedNorms.begin(), sortedNorms.end(), Vector4::lexLessThan );
+    QListIterator<Vector4> normIter( sortedNorms );
+
+    while ( normIter.hasNext() ) {
+        Vector4 sorted = normIter.next();
+        convex_norms.append( sorted );
+    }
+
+    CVSResult cc{std::move(convex_verts), std::move(convex_norms), float(spnRadius->value())};
+    return std::optional<CVSResult>(cc);
+}
 
 //! Creates a convex hull using Qhull
 class spCreateCVS final : public Spell
 {
+
 public:
     QString name() const override final { return Spell::tr( "Create Convex Shape" ); }
     QString page() const override final { return Spell::tr( "Havok" ); }
@@ -68,104 +177,26 @@ public:
             vertsTrans.append( v + trans );
         }
 
-        // to store results
-        QVector<Vector4> hullVerts, hullNorms;
-
-        // ask for precision
-        QDialog dlg;
-        QVBoxLayout * vbox = new QVBoxLayout;
-        dlg.setLayout( vbox );
-
-        vbox->addWidget( new QLabel( Spell::tr( "Enter the maximum roundoff error to use" ) ) );
-        vbox->addWidget( new QLabel( Spell::tr( "Larger values will give a less precise but better performing hull" ) ) );
-
-        QDoubleSpinBox * precSpin = new QDoubleSpinBox;
-        precSpin->setRange( 0, 5 );
-        precSpin->setDecimals( 3 );
-        precSpin->setSingleStep( 0.01 );
-        precSpin->setValue( 0.25 );
-        vbox->addWidget( precSpin );
-
-        vbox->addWidget( new QLabel( Spell::tr( "Collision Radius" ) ) );
-
-        QDoubleSpinBox * spnRadius = new QDoubleSpinBox;
-        spnRadius->setRange( 0, 0.5 );
-        spnRadius->setDecimals( 4 );
-        spnRadius->setSingleStep( 0.001 );
-        spnRadius->setValue( 0.05 );
-        vbox->addWidget( spnRadius );
-
-        QHBoxLayout * hbox = new QHBoxLayout;
-        vbox->addLayout( hbox );
-
-        QPushButton * ok = new QPushButton;
-        ok->setText( Spell::tr( "Ok" ) );
-        hbox->addWidget( ok );
-
-        QPushButton * cancel = new QPushButton;
-        cancel->setText( Spell::tr( "Cancel" ) );
-        hbox->addWidget( cancel );
-
-        QObject::connect( ok, &QPushButton::clicked, &dlg, &QDialog::accept );
-        QObject::connect( cancel, &QPushButton::clicked, &dlg, &QDialog::reject );
-
-        if ( dlg.exec() != QDialog::Accepted ) {
+        auto cvsResult = createCVS(vertsTrans, havokScale);
+        if(!cvsResult.has_value())
             return index;
-        }
-
-        /* make a convex hull from it */
-        compute_convex_hull( vertsTrans, hullVerts, hullNorms, (float)precSpin->value() );
-
-        // sort and remove duplicate vertices
-        QList<Vector4> sortedVerts;
-        for ( Vector4 vert : hullVerts ) {
-            vert /= havokScale;
-
-            if ( !sortedVerts.contains( vert ) ) {
-                sortedVerts.append( vert );
-            }
-        }
-        std::sort( sortedVerts.begin(), sortedVerts.end(), Vector4::lexLessThan );
-        QListIterator<Vector4> vertIter( sortedVerts );
-
-        while ( vertIter.hasNext() ) {
-            Vector4 sorted = vertIter.next();
-            convex_verts.append( sorted );
-        }
-
-        // sort and remove duplicate normals
-        QList<Vector4> sortedNorms;
-        for ( Vector4 norm : hullNorms ) {
-            norm = Vector4( Vector3( norm ), norm[3] / havokScale );
-
-            if ( !sortedNorms.contains( norm ) ) {
-                sortedNorms.append( norm );
-            }
-        }
-        std::sort( sortedNorms.begin(), sortedNorms.end(), Vector4::lexLessThan );
-        QListIterator<Vector4> normIter( sortedNorms );
-
-        while ( normIter.hasNext() ) {
-            Vector4 sorted = normIter.next();
-            convex_norms.append( sorted );
-        }
 
         /* create the CVS block */
         QModelIndex iCVS = nif->insertNiBlock( "bhkConvexVerticesShape" );
 
         /* set CVS verts */
-        nif->set<uint>( iCVS, "Num Vertices", convex_verts.count() );
+        nif->set<uint>( iCVS, "Num Vertices", cvsResult->Verts.count() );
         nif->updateArray( iCVS, "Vertices" );
-        nif->setArray<Vector4>( iCVS, "Vertices", convex_verts );
+        nif->setArray<Vector4>( iCVS, "Vertices", cvsResult->Verts );
 
         /* set CVS norms */
-        nif->set<uint>( iCVS, "Num Normals", convex_norms.count() );
+        nif->set<uint>( iCVS, "Num Normals", cvsResult->Norms.count() );
         nif->updateArray( iCVS, "Normals" );
-        nif->setArray<Vector4>( iCVS, "Normals", convex_norms );
+        nif->setArray<Vector4>( iCVS, "Normals", cvsResult->Norms );
 
         // radius is always 0.1?
         // TODO: Figure out if radius is not arbitrarily set in vanilla NIFs
-        nif->set<float>( iCVS, "Radius", spnRadius->value() );
+        nif->set<float>( iCVS, "Radius", cvsResult->CollRadius );
 
         // for arrow detection: [0, 0, -0, 0, 0, -0]
         nif->set<float>( nif->getIndex( iCVS, "Unknown 6 Floats" ).child( 2, 0 ), -0.0 );
@@ -204,7 +235,7 @@ public:
             nif->removeNiBlock( nif->getBlockNumber( shape ) );
         }
 
-        Message::info( nullptr, Spell::tr( "Created hull with %1 vertices, %2 normals" ).arg( convex_verts.count() ).arg( convex_norms.count() ) );
+        Message::info( nullptr, Spell::tr( "Created hull with %1 vertices, %2 normals" ).arg( cvsResult->Verts.count() ).arg( cvsResult->Verts.count() ) );
 
         // returning iCVS here can crash NifSkope if a child array is selected
         return index;
@@ -212,6 +243,137 @@ public:
 };
 
 REGISTER_SPELL( spCreateCVS )
+
+class spCreateCombinedCVS final : public Spell
+{
+
+public:
+    QString name() const override final { return Spell::tr( "Create Combined Convex Shape" ); }
+    QString page() const override final { return Spell::tr( "Havok" ); }
+
+    bool isApplicable( const NifModel * nif, const QModelIndex & index ) override final
+    {
+        return nif && nif->getRootLinks().count() == 1 &&!index.isValid() && nif->checkVersion( 0x0A000100, 0 );
+    }
+
+    QModelIndex cast( NifModel * nif, const QModelIndex & index ) override final
+    {
+        float havokScale = (nif->checkVersion( 0x14020007, 0x14020007 ) && nif->getUserVersion() >= 12) ? 10.0f : 1.0f;
+
+        havokScale *= havokConst;
+
+         /* those will be filled with the CVS data */
+         QList<qint32> lTris;
+
+         for ( int n = 0; n < nif->getBlockCount(); n++ ) {
+            QModelIndex iBlock = nif->getBlock( n );
+
+            QModelIndex iNumChildren = nif->getIndex( iBlock, "Num Children" );
+            QModelIndex iChildren = nif->getIndex( iBlock, "Children" );
+
+            if ( iNumChildren.isValid() && iChildren.isValid() ) {
+
+                for ( int r = 0; r < nif->rowCount( iChildren ); r++ )
+                {
+                    qint32 lChild = nif->getLink( iChildren.child( r, 0 ) );
+                    QModelIndex iChild = nif->getBlock( lChild );
+
+                    if ( nif->isNiBlock( iChild, { "NiTriShape", "NiTriStrips" } ) ){
+                        lTris << lChild;
+                    }
+                }
+            }
+        }
+
+        QVector<Vector3> vertsTrans;
+        for ( const auto lTri : lTris)
+        {
+            combine(nif, nif->getBlock( lTri ), vertsTrans);
+        }
+
+        auto cvsResult = createCVS(vertsTrans, havokScale);
+        if(!cvsResult.has_value())
+            return index;
+
+       const auto& convex_verts = cvsResult->Verts;
+       const auto& convex_norms = cvsResult->Norms;
+
+        /* create the CVS block */
+        QModelIndex iCVS = nif->insertNiBlock( "bhkConvexVerticesShape" );
+
+        /* set CVS verts */
+        nif->set<uint>( iCVS, "Num Vertices", convex_verts.count() );
+        nif->updateArray( iCVS, "Vertices" );
+        nif->setArray<Vector4>( iCVS, "Vertices", convex_verts );
+
+        /* set CVS norms */
+        nif->set<uint>( iCVS, "Num Normals", convex_norms.count() );
+        nif->updateArray( iCVS, "Normals" );
+        nif->setArray<Vector4>( iCVS, "Normals", convex_norms );
+
+        // radius is always 0.1?
+        // TODO: Figure out if radius is not arbitrarily set in vanilla NIFs
+        nif->set<float>( iCVS, "Radius", cvsResult->CollRadius );
+
+        // for arrow detection: [0, 0, -0, 0, 0, -0]
+        nif->set<float>( nif->getIndex( iCVS, "Unknown 6 Floats" ).child( 2, 0 ), -0.0 );
+        nif->set<float>( nif->getIndex( iCVS, "Unknown 6 Floats" ).child( 5, 0 ), -0.0 );
+
+        QModelIndex iParent = nif->getBlock( nif->getRootLinks()[0] );
+        QModelIndex collisionLink = nif->getIndex( iParent, "Collision Object" );
+        QModelIndex collisionObject = nif->getBlock( nif->getLink( collisionLink ) );
+
+        // create bhkCollisionObject
+        if ( !collisionObject.isValid() ) {
+            collisionObject = nif->insertNiBlock( "bhkCollisionObject" );
+
+            nif->setLink( collisionLink, nif->getBlockNumber( collisionObject ) );
+            nif->setLink( collisionObject, "Target", nif->getBlockNumber( iParent ) );
+        }
+
+        QModelIndex rigidBodyLink = nif->getIndex( collisionObject, "Body" );
+        QModelIndex rigidBody = nif->getBlock( nif->getLink( rigidBodyLink ) );
+
+        // create bhkRigidBody
+        if ( !rigidBody.isValid() ) {
+            rigidBody = nif->insertNiBlock( "bhkRigidBody" );
+
+            nif->setLink( rigidBodyLink, nif->getBlockNumber( rigidBody ) );
+        }
+
+        QModelIndex shapeLink = nif->getIndex( rigidBody, "Shape" );
+        QModelIndex shape = nif->getBlock( nif->getLink( shapeLink ) );
+
+        // set link and delete old one
+        nif->setLink( shapeLink, nif->getBlockNumber( iCVS ) );
+
+        if ( shape.isValid() ) {
+            // cheaper than calling spRemoveBranch
+            nif->removeNiBlock( nif->getBlockNumber( shape ) );
+        }
+
+        Message::info( nullptr, Spell::tr( "Created hull with %1 vertices, %2 normals" ).arg( convex_verts.count() ).arg( convex_norms.count() ) );
+
+        // returning iCVS here can crash NifSkope if a child array is selected
+        return index;
+    }
+
+    void combine( NifModel * nif, const QModelIndex& lTri, QVector<Vector3> &points)
+    {
+        QModelIndex iData = nif->getBlock( nif->getLink( lTri, "Data" ), "NiTriBasedGeomData" );
+
+        if ( !iData.isValid() ) return;
+
+        QVector<Vector3> verts = nif->getArray<Vector3>( iData, "Vertices" );
+        Vector3 trans = nif->get<Vector3>( iData, "Translation" );
+
+        for ( auto v : verts ) {
+            points.append( v + trans );
+        }
+    }
+};
+
+REGISTER_SPELL( spCreateCombinedCVS )
 
 //! Transforms Havok constraints
 class spConstraintHelper final : public Spell
@@ -589,9 +751,17 @@ TheMoppet;
 //! Creates a convex hull using Qhull
 class spCreateHACD final : public Spell
 {
+
+private:
+    VHacdDialog::DialValues dialValues;
 public:
     QString name() const override final { return Spell::tr( "Create Convex Decomposition" ); }
     QString page() const override final { return Spell::tr( "Havok" ); }
+
+    spCreateHACD() :
+        dialValues (100000, 0.0025, 8, 4)
+    {
+    }
 
     bool isApplicable( const NifModel * nif, const QModelIndex & index ) override final
     {
@@ -624,59 +794,15 @@ public:
         havokScale *= havokConst;
 
         /* those will be filled with the CVS data */
-        //QVector<Vector4> convex_verts, convex_norms;
-        QDialog dlg;
-        QVBoxLayout * vbox = new QVBoxLayout;
-        dlg.setLayout( vbox );
+        VHacdDialog dlg{};
+        dlg.setParams(dialValues);
 
-        vbox->addWidget( new QLabel( Spell::tr( "Resolution" ) ) );
+         if ( dlg.exec() != QDialog::Accepted ) {
+             // Save values for next call
+             return index;
+         }
 
-        QSpinBox * paramRes = new QSpinBox;
-        paramRes->setRange(10000, 64000000);
-        paramRes->setSingleStep(100000);
-        paramRes->setValue(100000);
-        vbox->addWidget(paramRes);
-
-        vbox->addWidget( new QLabel( Spell::tr( "Concavity" ) ) );
-
-        QDoubleSpinBox * paramConcav = new QDoubleSpinBox;
-        paramConcav->setRange( 0, 1.0 );
-        paramConcav->setDecimals( 4 );
-        paramConcav->setSingleStep( 0.01 );
-        paramConcav->setValue( 0.0025 );
-        vbox->addWidget( paramConcav );
-
-        vbox->addWidget( new QLabel( Spell::tr( "verticesPerCH" ) ) );
-        QSpinBox* paramVpch = new QSpinBox;
-        paramVpch->setRange(4, 1024);
-        paramVpch->setSingleStep(1);
-        paramVpch->setValue(1);
-        vbox->addWidget(paramVpch);
-
-        vbox->addWidget( new QLabel( Spell::tr( "Material" ) ) );
-        QComboBox * paramMatls = new QComboBox;
-        auto strings = NifValue::enumOptions("SkyrimHavokMaterial");
-        paramMatls->addItems(strings);
-        paramMatls->setCurrentIndex(4);
-        vbox->addWidget(paramMatls);
-
-        QHBoxLayout * hbox = new QHBoxLayout;
-        vbox->addLayout( hbox );
-
-        QPushButton * okButton = new QPushButton;
-        okButton->setText( Spell::tr( "Ok" ) );
-        hbox->addWidget( okButton );
-
-        QPushButton * cancel = new QPushButton;
-        cancel->setText( Spell::tr( "Cancel" ) );
-        hbox->addWidget( cancel );
-
-        QObject::connect( okButton, &QPushButton::clicked, &dlg, &QDialog::accept );
-        QObject::connect( cancel, &QPushButton::clicked, &dlg, &QDialog::reject );
-
-        if ( dlg.exec() != QDialog::Accepted ) {
-            return index;
-        }
+         dialValues = dlg.getParams();
 
         /* get the verts of our mesh */
         QVector<Vector3> verts = nif->getArray<Vector3>( iData, "Vertices" );
@@ -705,15 +831,8 @@ public:
 
         VHACD::IVHACD* interfaceVHACD = VHACD::CreateVHACD();
 
-        VHACD::IVHACD::Parameters params;
-        params.m_resolution = paramRes->value();
-        params.m_concavity = paramConcav->value();
-        params.m_planeDownsampling = 4;
-        params.m_convexhullDownsampling = 8;
-        params.m_maxNumVerticesPerCH = paramVpch->value();
-
         bool res = interfaceVHACD->Compute(&points[0], (unsigned int)points.size() / 3,
-                (const uint32_t *)&triangles[0], (unsigned int)triangles.size() / 3, params);
+                (const uint32_t *)&triangles[0], (unsigned int)triangles.size() / 3, dialValues.params);
 
         if (!res)
         {
@@ -725,8 +844,8 @@ public:
 
         bool ok;
         quint32 enumVal;
-
-        enumVal = NifValue::enumOptionValue("SkyrimHavokMaterial", paramMatls->currentText(), &ok);
+        auto matlsStrings = NifValue::enumOptions("SkyrimHavokMaterial");
+        enumVal = NifValue::enumOptionValue("SkyrimHavokMaterial", matlsStrings.at(dialValues.matlsIndex), &ok);
         if(!ok) enumVal = 0;
 
         for (unsigned int p = 0; p < interfaceVHACD->GetNConvexHulls(); ++p)
@@ -894,5 +1013,365 @@ public:
 };
 
 REGISTER_SPELL( spCreateHACD )
+
+class spCreateCombinedHACD final : public Spell
+{
+private:
+    VHacdDialog::DialValues dialValues;
+public:
+    QString name() const override final { return Spell::tr( "Create Combined Convex Decomposition" ); }
+    QString page() const override final { return Spell::tr( "Havok" ); }
+
+    spCreateCombinedHACD() :
+        dialValues (100000, 0.0025, 8, 4)
+    {
+    }
+
+    bool isApplicable( const NifModel * nif, const QModelIndex & index ) override final
+    {
+        if ( TheMoppet.Initialize() )
+        {
+            //return nif && nif->isNiBlock( index, "NiNode" );
+            return nif && nif->getRootLinks().count() == 1 &&!index.isValid();
+        }
+
+        return false;
+    }
+
+    QModelIndex cast( NifModel * nif, const QModelIndex & index ) override final
+    {
+        // moppTree
+        Vector3 origin;
+        float scale;
+        QByteArray moppCode;
+
+        float havokScale = (nif->checkVersion( 0x14020007, 0x14020007 ) && nif->getUserVersion() >= 12) ? 10.0f : 1.0f;
+
+        havokScale *= havokConst;
+
+        /* those will be filled with the CVS data */
+        //QVector<Vector4> convex_verts, convex_norms;
+       VHacdDialog dlg{};
+       dlg.setParams(dialValues);
+
+        if ( dlg.exec() != QDialog::Accepted ) {
+            // Save values for next call
+            return index;
+        }
+
+        dialValues = dlg.getParams();
+
+        QList<qint32> lTris;
+        for ( int n = 0; n < nif->getBlockCount(); n++ ) {
+            QModelIndex iBlock = nif->getBlock( n );
+
+            QModelIndex iNumChildren = nif->getIndex( iBlock, "Num Children" );
+            QModelIndex iChildren = nif->getIndex( iBlock, "Children" );
+
+            if ( iNumChildren.isValid() && iChildren.isValid() ) {
+
+                for ( int r = 0; r < nif->rowCount( iChildren ); r++ )
+                {
+                    qint32 lChild = nif->getLink( iChildren.child( r, 0 ) );
+                    QModelIndex iChild = nif->getBlock( lChild );
+
+                    if ( nif->isNiBlock( iChild, { "NiTriShape", "NiTriStrips" } ) ){
+                        lTris << lChild;
+                    }
+                }
+            }
+        }
+
+        int rootIdx = nif->getRootLinks()[0];
+        QPersistentModelIndex iParent = nif->getBlock(rootIdx);
+
+        /* get the verts of our mesh */
+        QVector<float> points;
+        QVector<uint32_t> triangles;
+
+        for ( const auto lTri : lTris)
+        {
+            QVector<Vector3> vertsTrans;
+            combine(nif, nif->getBlock( lTri ), points, triangles);
+        }
+//------------------------------------------------------
+
+        VHACD::IVHACD* interfaceVHACD = VHACD::CreateVHACD();
+
+        bool res = interfaceVHACD->Compute(&points[0], (unsigned int)points.size() / 3,
+                (const uint32_t *)&triangles[0], (unsigned int)triangles.size() / 3, dialValues.params);
+
+        if (!res)
+        {
+            return index;
+        }
+
+        QVector<qint32> shapeList;
+        QModelIndex iBLS = nif->insertNiBlock("bhkListShape");
+
+        bool ok;
+        quint32 enumVal;
+
+        auto matlsStrings = NifValue::enumOptions("SkyrimHavokMaterial");
+        enumVal = NifValue::enumOptionValue("SkyrimHavokMaterial", matlsStrings.at(dialValues.matlsIndex), &ok);
+        if(!ok) enumVal = 0;
+
+        for (unsigned int p = 0; p < interfaceVHACD->GetNConvexHulls(); ++p)
+        {
+            QVector<Vector4> hullVerts;
+            QVector<Vector4> hullNorms;
+            VHACD::IVHACD::ConvexHull ch;
+            interfaceVHACD->GetConvexHull(p, ch);
+            // Get points
+            for (uint32_t i = 0; i < ch.m_nPoints; i++) {
+                Vector4 v;
+                v[0] = ch.m_points[3 * i];
+                v[1] = ch.m_points[3 * i + 1];
+                v[2] = ch.m_points[3 * i + 2];
+                v /= havokScale;
+                hullVerts.append(v);
+            }
+
+            TheMoppet.AddVertex(hullVerts);
+            for (uint32_t i = 0; i < ch.m_nTriangles; i++) {
+                Triangle t {
+                    (quint16)ch.m_triangles[3 * i],
+                            (quint16)ch.m_triangles[3 * i + 1],
+                            (quint16)ch.m_triangles[3 * i + 2]
+                };
+
+
+                Vector3 u {hullVerts[t[1]] - hullVerts[t[0]]};
+                Vector3 v {hullVerts[t[2]] - hullVerts[t[0]]};
+
+                Vector3 n = Vector3::crossproduct(u,v);
+                n = n.normalize();
+
+                hullNorms.append(Vector4{n});
+            }
+
+            QModelIndex iCVS = nif->insertNiBlock( "bhkConvexVerticesShape" );
+
+            /* set CVS verts */
+            nif->set<uint>( iCVS, "Num Vertices", hullVerts.count() );
+            nif->updateArray( iCVS, "Vertices" );
+            nif->setArray<Vector4>( iCVS, "Vertices", hullVerts);
+            nif->set<float>( iCVS, "Radius", 0.001f);
+            /* set CVS norms */
+            nif->set<uint>( iCVS, "Num Normals", hullNorms.count() );
+            nif->updateArray( iCVS, "Normals" );
+            nif->setArray<Vector4>( iCVS, "Normals", hullNorms);
+
+            // for arrow detection: [0, 0, -0, 0, 0, -0]
+            nif->set<float>( nif->getIndex( iCVS, "Unknown 6 Floats" ).child( 2, 0 ), -0.0 );
+            nif->set<float>( nif->getIndex( iCVS, "Unknown 6 Floats" ).child( 5, 0 ), -0.0 );
+
+            nif->set<quint32>(iCVS, "Material", enumVal);
+
+            shapeList.append(nif->getBlockNumber(iCVS));
+        }
+
+
+        // Add all entries to shapeList
+        QModelIndex shapeArray = nif->getIndex(iBLS, "Sub Shapes");
+        nif->set<uint>(iBLS, "Num Sub Shapes", shapeList.count());
+        nif->updateArray(shapeArray);
+        nif->setLinkArray(shapeArray, shapeList);
+        nif->set<quint32>(iBLS, "Material", enumVal);
+
+        // TODO: How does one achieve multiple collision items?
+        QModelIndex collisionLink = nif->getIndex( iParent, "Collision Object" );
+        QModelIndex collisionObject = nif->getBlock( nif->getLink( collisionLink ) );
+
+        // create bhkCollisionObject
+        if ( !collisionObject.isValid() ) {
+            collisionObject = nif->insertNiBlock( "bhkCollisionObject" );
+
+            nif->setLink( collisionLink, nif->getBlockNumber( collisionObject ) );
+            nif->setLink( collisionObject, "Target", nif->getBlockNumber( iParent ) );
+        }
+
+        // create moppBvTreeShape (optionally)
+        if(shapeList.count() >  4)
+        {
+            moppCode = TheMoppet.RetrieveMoppCode(&origin, &scale);
+            if ( moppCode.size() == 0 ) {
+                Message::critical( nullptr, Spell::tr( "Failed to generate MOPP code" ) );
+            } else {
+                QModelIndex ibhkMoppBvTreeShape = nif->insertNiBlock( "bhkMoppBvTreeShape" );
+                QModelIndex shapeLink = nif->getIndex( ibhkMoppBvTreeShape, "Shape" );
+                QModelIndex shape = nif->getBlock( nif->getLink( shapeLink ) );
+                nif->setLink( shapeLink, nif->getBlockNumber( iBLS ) );
+                iBLS = ibhkMoppBvTreeShape;
+
+                if ( shape.isValid() ) {
+                    // TODO: Remove children (this is turning into a monstrosity)
+                    nif->removeNiBlock( nif->getBlockNumber( shape ) );
+                }
+            }
+        }
+
+        QModelIndex rigidBodyLink = nif->getIndex( collisionObject, "Body" );
+        QModelIndex rigidBody = nif->getBlock( nif->getLink( rigidBodyLink ) );
+        // create bhkRigidBody
+        if ( !rigidBody.isValid() ) {
+            rigidBody = nif->insertNiBlock( "bhkRigidBody" );
+
+            nif->setLink( rigidBodyLink, nif->getBlockNumber( rigidBody ) );
+        }
+
+        enumVal = NifValue::enumOptionValue("SkyrimLayer", "SKYL_CLUTTER", &ok);
+        if(ok) nif->set<quint8>(rigidBody, "Layer", enumVal);
+
+        nif->set<quint8>(rigidBody, "Flags and Part Number", 128);
+        nif->set<ushort>(rigidBody, "Process Contact Callback Delay", 65535);
+
+        enumVal = NifValue::enumOptionValue("hkMotionType", "MO_SYS_SPHERE_STABILIZED", &ok);
+        if(ok) nif->set<quint8>(rigidBody, "Motion System", enumVal);
+
+        enumVal = NifValue::enumOptionValue("hkQualityType", "MO_QUAL_MOVING", &ok);
+        if(ok) nif->set<quint8>(rigidBody, "Quality Type", enumVal); //MO_QUAL_MOVING
+
+        enumVal = NifValue::enumOptionValue("hkSolverDeactivation", "SOLVER_DEACTIVATION_LOW", &ok);
+        if(ok) nif->set<quint8>(rigidBody, "Solver Deactivation", enumVal); //SOLVER_DEACTIVATION_LOW
+
+        QModelIndex shapeLink = nif->getIndex( rigidBody, "Shape" );
+        QModelIndex shape = nif->getBlock( nif->getLink( shapeLink ) );
+
+        nif->setLink( shapeLink, nif->getBlockNumber( iBLS ) );
+
+        if ( shape.isValid() ) {
+            // cheaper than calling spRemoveBranch
+            nif->removeNiBlock( nif->getBlockNumber( shape ) );
+        }
+
+
+        QModelIndex moppTreeLink = nif->getIndex( rigidBody, "Shape" );
+        QModelIndex ibhkMoppBvTreeShape = nif->getBlock( nif->getLink( moppTreeLink ) );
+        if(ibhkMoppBvTreeShape.isValid())
+        {
+            enumVal = NifValue::enumOptionValue("MoppDataBuildType", "BUILT_WITHOUT_CHUNK_SUBDIVISION", &ok);
+            if(ok)
+                nif->set<quint8>(ibhkMoppBvTreeShape, "Build Type", enumVal);
+
+            QModelIndex iCodeOrigin = nif->getIndex( ibhkMoppBvTreeShape, "Origin" );
+            nif->set<Vector3>( iCodeOrigin, origin );
+
+            QModelIndex iCodeScale = nif->getIndex( ibhkMoppBvTreeShape, "Scale" );
+            nif->set<float>( iCodeScale, scale );
+
+            QModelIndex iCodeSize = nif->getIndex( ibhkMoppBvTreeShape, "MOPP Data Size" );
+            QModelIndex iCode = nif->getIndex( ibhkMoppBvTreeShape, "MOPP Data" );
+
+            if ( iCodeSize.isValid()) {
+                nif->set<int>( iCodeSize, moppCode.size() );
+                nif->updateArray( iCode );
+                QModelIndex iChild = iCode.child(0,0);
+                if(iChild.isValid())
+                    nif->set<QByteArray>( iChild, moppCode );
+            }
+        }
+
+        Message::info( nullptr, Spell::tr( "Created v-hacd with %1 convex surfaces" ).arg( shapeList.count() ));
+
+        // returning iCVS here can crash NifSkope if a child array is selected
+        return index;
+    }
+
+    //! Combines meshes a and b ( a += b )
+    void combine( NifModel * nif, const QModelIndex& lTri, QVector<float> &points, QVector<uint32_t>& triangles)
+    {
+        QModelIndex iData = nif->getBlock( nif->getLink( lTri, "Data" ), "NiTriBasedGeomData" );
+
+        if ( !iData.isValid() ) return;
+
+        QVector<Vector3> verts = nif->getArray<Vector3>( iData, "Vertices" );
+        Vector3 trans = nif->get<Vector3>( iData, "Translation" );
+        nif->getParent(iData);
+
+        uint32_t numVert = points.count()/3;
+
+        for ( auto v : verts ) {
+            points.append(v[0] + trans[0]);
+            points.append(v[1] + trans[1]);
+            points.append(v[2] + trans[2]);
+        }
+
+        QVector<Triangle> tris = nif->getArray<Triangle>(iData, "Triangles");
+        // Add triangles
+        for(auto t : tris)
+        {
+            triangles.append(t[0]+ numVert);
+            triangles.append(t[1]+ numVert);
+            triangles.append(t[2]+ numVert);
+        }
+    }
+};
+
+REGISTER_SPELL( spCreateCombinedHACD )
+
+VHacdDialog::VHacdDialog(QWidget * parent): QDialog(parent)
+{
+    // those will be filled with the CVS data
+    QVBoxLayout * vbox = new QVBoxLayout;
+    setLayout( vbox );
+
+    vbox->addWidget( new QLabel( Spell::tr( "Resolution" ) ) );
+
+    paramRes = new QSpinBox;
+    paramRes->setRange(10000, 64000000);
+    paramRes->setSingleStep(100000);
+    vbox->addWidget(paramRes);
+
+    vbox->addWidget( new QLabel( Spell::tr( "Concavity" ) ) );
+
+    paramConcav = new QDoubleSpinBox();
+    paramConcav->setRange( 0, 1.0 );
+    paramConcav->setDecimals( 4 );
+    paramConcav->setSingleStep( 0.01 );
+    vbox->addWidget( paramConcav );
+
+    vbox->addWidget( new QLabel( Spell::tr( "verticesPerCH" ) ) );
+
+    paramVpch = new QSpinBox;
+    paramVpch->setRange(8, 1024);
+    paramVpch->setSingleStep(1);
+    vbox->addWidget(paramVpch);
+
+    vbox->addWidget( new QLabel( Spell::tr( "Material" ) ) );
+
+    auto strings = NifValue::enumOptions("SkyrimHavokMaterial");
+    paramMatls = new QComboBox();
+    paramMatls->addItems(strings);
+    vbox->addWidget(paramMatls);
+
+    QHBoxLayout * hbox = new QHBoxLayout;
+    vbox->addLayout( hbox );
+
+    QPushButton * okButton = new QPushButton;
+    okButton->setText( Spell::tr( "Ok" ) );
+    hbox->addWidget( okButton );
+
+    QPushButton * cancel = new QPushButton;
+    cancel->setText( Spell::tr( "Cancel" ) );
+    hbox->addWidget( cancel );
+
+    QObject::connect( okButton, &QPushButton::clicked, this, &VHacdDialog::accept );
+    QObject::connect( cancel, &QPushButton::clicked, this, &VHacdDialog::reject );
+}
+
+void VHacdDialog::setParams(const VHacdDialog::DialValues values)
+{
+    paramRes->setValue(values.params.m_resolution);
+    paramConcav->setValue( values.params.m_concavity);
+    paramVpch->setValue(values.params.m_maxNumVerticesPerCH);
+    paramMatls->setCurrentIndex(values.matlsIndex);
+}
+
+VHacdDialog::DialValues VHacdDialog::getParams()
+{
+    VHacdDialog::DialValues retVal{paramRes->value(), paramConcav->value(),paramVpch->value(),paramMatls->currentIndex()};
+    return retVal;
+}
 
 #endif
