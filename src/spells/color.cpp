@@ -93,12 +93,15 @@ bool getColorDialogue(int maxIdx, bool alphaEnable, int& retIdx, QColor& pickCol
     findVal->setRange(0, maxIdx);
     vbox->addWidget( findVal );
 
+    vbox->addWidget( new QLabel( Spell::tr( "Replacement Color" ) ) );
+
     QGridLayout * grid = new QGridLayout;
     vbox->addLayout( grid );
 
     ColorWheel * hsv = new ColorWheel;
     grid->addWidget( hsv, 0, 0, 1, 2 );
     hsv->setAlpha( alphaEnable );
+
 
     AlphaSlider * alpha = new AlphaSlider;
     alpha->setValue( 1.0f );
@@ -108,6 +111,12 @@ bool getColorDialogue(int maxIdx, bool alphaEnable, int& retIdx, QColor& pickCol
     alpha->setVisible( alphaEnable );
     QObject::connect( hsv, &ColorWheel::sigColor, alpha, &AlphaSlider::setColor );
     QObject::connect( alpha, &AlphaSlider::valueChanged, hsv, &ColorWheel::setAlphaValue );
+
+    QLabel* value = new QLabel(QString::number(alpha->value(), 'f', 3 ));
+    grid->addWidget( value, 1, 2 );
+    QObject::connect(alpha, &AlphaSlider::valueChanged,
+                     [=](float v){value->setText(QString::number(v, 'f', 3 ));}
+                     );
 
 
     QHBoxLayout * hbox = new QHBoxLayout;

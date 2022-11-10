@@ -50,166 +50,166 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VAL_HEIGHT 12
 
 FloatSliderEditBox::FloatSliderEditBox( QWidget * parent )
-	: QFrame( parent, Qt::Popup | Qt::FramelessWindowHint )
+    : QFrame( parent, Qt::Popup | Qt::FramelessWindowHint )
 {
-	setVisible( false );
-	setFrameShadow( QFrame::Raised );
-	setFrameShape( QFrame::StyledPanel );
-	setLineWidth( 0 );
-	setMaximumWidth( 100 );
+    setVisible( false );
+    setFrameShadow( QFrame::Raised );
+    setFrameShape( QFrame::StyledPanel );
+    setLineWidth( 0 );
+    setMaximumWidth( 100 );
 
-	QVBoxLayout * layout = new QVBoxLayout();
-	layout->setMargin( 4 );
-	layout->setSpacing( 2 );
-	setLayout( layout );
+    QVBoxLayout * layout = new QVBoxLayout();
+    layout->setMargin( 4 );
+    layout->setSpacing( 2 );
+    setLayout( layout );
 }
 
 void FloatSliderEditBox::addWidget( QWidget * w )
 {
-	layout()->addWidget( w );
+    layout()->addWidget( w );
 }
 
 void FloatSliderEditBox::show( const QPoint & pos )
 {
-	if ( isVisible() ) {
-		return;
-	}
+    if ( isVisible() ) {
+        return;
+    }
 
-	move( pos );
-	QWidget::show();
-	setFocus( Qt::PopupFocusReason );
-	connect( qApp, &QApplication::focusChanged, this, &FloatSliderEditBox::focusChanged );
+    move( pos );
+    QWidget::show();
+    setFocus( Qt::PopupFocusReason );
+    connect( qApp, &QApplication::focusChanged, this, &FloatSliderEditBox::focusChanged );
 }
 
 void FloatSliderEditBox::hide()
 {
-	if ( !isVisible() ) {
-		return;
-	}
+    if ( !isVisible() ) {
+        return;
+    }
 
-	disconnect( qApp, &QApplication::focusChanged, this, &FloatSliderEditBox::focusChanged );
+    disconnect( qApp, &QApplication::focusChanged, this, &FloatSliderEditBox::focusChanged );
 
-	QWidget::hide();
+    QWidget::hide();
 }
 
 void FloatSliderEditBox::focusChanged( QWidget * oldW, QWidget * newW )
 {
-	Q_UNUSED( oldW );
+    Q_UNUSED( oldW );
 
-	if ( newW == this ) {
-		return;
-	}
+    if ( newW == this ) {
+        return;
+    }
 
-	if ( layout()->indexOf( newW ) > -1 ) {
-		return;
-	}
+    if ( layout()->indexOf( newW ) > -1 ) {
+        return;
+    }
 
-	hide();
+    hide();
 }
 
 FloatSlider::FloatSlider( Qt::Orientation o, bool showValue, bool isEditor )
-	: QWidget(), val( 0.5 ), min( 0 ), max( 1.0 ), ori( o ), pressed( false )
+    : QWidget(), val( 0.5 ), min( 0 ), max( 1.0 ), ori( o ), pressed( false )
 {
-	QSizePolicy sp( QSizePolicy::Expanding, QSizePolicy::Fixed );
+    QSizePolicy sp( QSizePolicy::Expanding, QSizePolicy::Fixed );
 
-	if ( ori == Qt::Vertical )
-		sp.transpose();
+    if ( ori == Qt::Vertical )
+        sp.transpose();
 
-	setSizePolicy( sp );
+    setSizePolicy( sp );
 
-	showVal = showValue;
-	editVal = showVal && isEditor;
+    showVal = showValue;
+    editVal = showVal && isEditor;
 
-	if ( showVal ) {
-		QFont fnt( "Arial", -1, QFont::Normal );
-		fnt.setStyleStrategy( QFont::PreferAntialias );
-		fnt.setPixelSize( VAL_HEIGHT - 2 );
-		setFont( fnt );
-	}
+    if ( showVal ) {
+        QFont fnt( "Arial", -1, QFont::Normal );
+        fnt.setStyleStrategy( QFont::PreferAntialias );
+        fnt.setPixelSize( VAL_HEIGHT - 2 );
+        setFont( fnt );
+    }
 
-	if ( editVal ) {
-		setToolTip( tr( "Click value to edit." ) );
-	}
+    if ( editVal ) {
+        setToolTip( tr( "Click value to edit." ) );
+    }
 
-	editBox = new FloatSliderEditBox( this );
+    editBox = new FloatSliderEditBox( this );
 }
 
 void FloatSlider::setValue( float v )
 {
-	if ( v < min )
-		v = min;
+    if ( v < min )
+        v = min;
 
-	if ( v > max )
-		v = max;
+    if ( v > max )
+        v = max;
 
-	if ( val != v ) {
-		val = v;
-		update();
-	}
+    if ( val != v ) {
+        val = v;
+        update();
+    }
 }
 
 void FloatSlider::setValueUser( float v )
 {
-	if ( v < min )
-		v = min;
+    if ( v < min )
+        v = min;
 
-	if ( v > max )
-		v = max;
+    if ( v > max )
+        v = max;
 
-	if ( val != v ) {
-		val = v;
-		update();
-		emit valueChanged( val );
-	}
+    if ( val != v ) {
+        val = v;
+        update();
+        emit valueChanged( val );
+    }
 }
 
 void FloatSlider::setRange( float mn, float mx )
 {
-	if ( mn > mx )
-		mx = mn;
+    if ( mn > mx )
+        mx = mn;
 
-	if ( min != mn || max != mx ) {
-		min = mn;
+    if ( min != mn || max != mx ) {
+        min = mn;
 
-		if ( val < min )
-			setValue( min );
+        if ( val < min )
+            setValue( min );
 
-		max = mx;
+        max = mx;
 
-		if ( val > max )
-			setValue( max );
+        if ( val > max )
+            setValue( max );
 
-		update();
-	}
+        update();
+    }
 }
 
 void FloatSlider::set( float v, float mn, float mx )
 {
-	setRange( mn, mx );
-	setValue( v );
+    setRange( mn, mx );
+    setValue( v );
 }
 
 void FloatSlider::setOrientation( Qt::Orientation o )
 {
-	if ( ori != o ) {
-		ori = o;
-		QSizePolicy sp = sizePolicy();
-		sp.transpose();
-		setSizePolicy( sp );
-		updateGeometry();
-		update();
-	}
+    if ( ori != o ) {
+        ori = o;
+        QSizePolicy sp = sizePolicy();
+        sp.transpose();
+        setSizePolicy( sp );
+        updateGeometry();
+        update();
+    }
 }
 
 void FloatSlider::addEditor( QWidget * editWidget )
 {
-	editBox->addWidget( editWidget );
+    editBox->addWidget( editWidget );
 }
 
 QStyleOptionSlider FloatSlider::getStyleOption() const
 {
-	QStyleOptionSlider opt;
-	/*
+    QStyleOptionSlider opt;
+    /*
 	opt.init(q);
 	opt.orientation = orientation;
 	opt.maximum = maximum;
@@ -226,207 +226,207 @@ QStyleOptionSlider FloatSlider::getStyleOption() const
 	opt.pageStep = pageStep;
 	if (orientation == Qt::Horizontal)
 	    opt.state |= QStyle::State_Horizontal;
-	*/
+    */
 
-	opt.initFrom( this );
+    opt.initFrom( this );
 
-	opt.subControls = QStyle::SC_SliderGroove | QStyle::SC_SliderHandle;
-	opt.activeSubControls = QStyle::SC_None;
+    opt.subControls = QStyle::SC_SliderGroove | QStyle::SC_SliderHandle;
+    opt.activeSubControls = QStyle::SC_None;
 
-	if ( showVal ) {
-		int w = fontMetrics().width( "0.000" );
+    if ( showVal ) {
+        int w = fontMetrics().width( "0.000" );
 //#pragma message("NOTICE: Qt Bugfix is needed here, see http://pastebin.mozilla.org/101393")
-		opt.rect.adjust( (6 * w) / 10, VAL_HEIGHT, (-6 * w) / 10, 0 );
-	}
+        opt.rect.adjust( (6 * w) / 10, VAL_HEIGHT, (-6 * w) / 10, 0 );
+    }
 
-	opt.maximum = INT_MAX;
-	opt.minimum = 0;
-	opt.orientation = ori;
-	opt.pageStep = 10;
-	opt.singleStep  = 1;
-	opt.sliderValue = ( max != min ) ? int(1.0f * ( val - min ) / ( max - min ) * opt.maximum) - 1 : 0;
-	opt.sliderPosition = opt.sliderValue;
-	opt.tickPosition = QSlider::NoTicks;
-	opt.direction = Qt::LeftToRight;
-	opt.dialWrapping = false;
+    opt.maximum = INT_MAX;
+    opt.minimum = 0;
+    opt.orientation = ori;
+    opt.pageStep = 10;
+    opt.singleStep  = 1;
+    opt.sliderValue = ( max != min ) ? int(1.0f * ( val - min ) / ( max - min ) * opt.maximum) : 0;
+    opt.sliderPosition = opt.sliderValue;
+    opt.tickPosition = QSlider::NoTicks;
+    opt.direction = Qt::LeftToRight;
+    opt.dialWrapping = false;
 
-	/* upside down for vertical slider; zero at bottom position */
-	opt.upsideDown = (ori == Qt::Vertical);
+    /* upside down for vertical slider; zero at bottom position */
+    opt.upsideDown = (ori == Qt::Vertical);
 
-	return opt;
+    return opt;
 }
 
 void FloatSlider::paintEvent( QPaintEvent * e )
 {
-	Q_UNUSED( e );
-	QPainter p( this );
-	QStyleOptionSlider opt = getStyleOption();
+    Q_UNUSED( e );
+    QPainter p( this );
+    QStyleOptionSlider opt = getStyleOption();
 
-	if ( pressed ) {
-		opt.activeSubControls = QStyle::SC_SliderHandle;
-		opt.state |= QStyle::State_Sunken;
-	}
+    if ( pressed ) {
+        opt.activeSubControls = QStyle::SC_SliderHandle;
+        opt.state |= QStyle::State_Sunken;
+    }
 
-	if ( showVal ) {
-		QString t = QString().number( val, 'f', 3 );
-		QRect tr  = style()->subControlRect( QStyle::CC_Slider, &opt, QStyle::SC_SliderHandle, this );
-		tr.adjust( -opt.rect.left() + 2, -VAL_HEIGHT, opt.rect.left() - 2, -tr.height() - 1 );
+    if ( showVal ) {
+        QString t = QString().number( val, 'f', 3 );
+        QRect tr  = style()->subControlRect( QStyle::CC_Slider, &opt, QStyle::SC_SliderHandle, this );
+        tr.adjust( -opt.rect.left() + 2, -VAL_HEIGHT, opt.rect.left() - 2, -tr.height() - 1 );
 
-		p.drawText( tr, t, QTextOption( Qt::AlignCenter ) );
-	}
+        p.drawText( tr, t, QTextOption( Qt::AlignCenter ) );
+    }
 
-	style()->drawComplexControl( QStyle::CC_Slider, &opt, &p, this );
+    style()->drawComplexControl( QStyle::CC_Slider, &opt, &p, this );
 }
 
 void FloatSlider::mousePressEvent( QMouseEvent * ev )
 {
-	if ( max <= min || ( ev->buttons() != Qt::LeftButton ) ) {
-		ev->ignore();
-		return;
-	}
+    if ( max <= min || ( ev->buttons() != Qt::LeftButton ) ) {
+        ev->ignore();
+        return;
+    }
 
-	ev->accept();
+    ev->accept();
 
-	if ( editVal && QRect( 0, 0, width(), VAL_HEIGHT ).contains( ev->pos() ) ) {
-		editBox->show( this->mapToGlobal( ev->pos() ) );
-	} else {
-		pressed = true;
+    if ( editVal && QRect( 0, 0, width(), VAL_HEIGHT ).contains( ev->pos() ) ) {
+        editBox->show( this->mapToGlobal( ev->pos() ) );
+    } else {
+        pressed = true;
 
-		setValueUser( mapToValue( ev->pos() ) );
-		update();
-	}
+        setValueUser( mapToValue( ev->pos() ) );
+        update();
+    }
 }
 
 void FloatSlider::mouseMoveEvent( QMouseEvent * ev )
 {
-	if ( !pressed || max <= min || ( ev->buttons() != Qt::LeftButton ) ) {
-		ev->ignore();
-		return;
-	}
+    if ( !pressed || max <= min || ( ev->buttons() != Qt::LeftButton ) ) {
+        ev->ignore();
+        return;
+    }
 
-	ev->accept();
+    ev->accept();
 
-	setValueUser( mapToValue( ev->pos() ) );
-	update();
+    setValueUser( mapToValue( ev->pos() ) );
+    update();
 }
 
 void FloatSlider::mouseReleaseEvent( QMouseEvent * ev )
 {
-	if ( ev->button() != Qt::LeftButton ) {
-		ev->ignore();
-		return;
-	}
+    if ( ev->button() != Qt::LeftButton ) {
+        ev->ignore();
+        return;
+    }
 
-	ev->accept();
+    ev->accept();
 
-	pressed = false;
-	update();
+    pressed = false;
+    update();
 }
 
 float FloatSlider::mapToValue( const QPoint & p ) const
 {
-	QStyleOptionSlider opt = getStyleOption();
-	QRect gr = style()->subControlRect( QStyle::CC_Slider, &opt, QStyle::SC_SliderGroove, this );
-	QRect sr = style()->subControlRect( QStyle::CC_Slider, &opt, QStyle::SC_SliderHandle, this );
-	int sliderMin, sliderLen, sliderPos;
+    QStyleOptionSlider opt = getStyleOption();
+    QRect gr = style()->subControlRect( QStyle::CC_Slider, &opt, QStyle::SC_SliderGroove, this );
+    QRect sr = style()->subControlRect( QStyle::CC_Slider, &opt, QStyle::SC_SliderHandle, this );
+    int sliderMin, sliderLen, sliderPos;
 
-	if ( ori == Qt::Horizontal ) {
-		sliderMin = gr.x() + sr.width() / 2;
-		sliderLen = gr.width() - sr.width();
-		sliderPos = p.x();
-	} else {
-		sliderMin = gr.y() + sr.height() / 2;
-		sliderLen = gr.height() - sr.height();
-		sliderPos = height() - p.y();
-	}
+    if ( ori == Qt::Horizontal ) {
+        sliderMin = gr.x() + sr.width() / 2;
+        sliderLen = gr.width() - sr.width();
+        sliderPos = p.x();
+    } else {
+        sliderMin = gr.y() + sr.height() / 2;
+        sliderLen = gr.height() - sr.height();
+        sliderPos = height() - p.y();
+    }
 
-	if ( sliderPos <= sliderMin )
-		return min;
+    if ( sliderPos <= sliderMin )
+        return min;
 
-	if ( sliderPos >= sliderMin + sliderLen )
-		return max;
+    if ( sliderPos >= sliderMin + sliderLen )
+        return max;
 
-	return min + ( min != max ? ( float(sliderPos - sliderMin) / float(sliderLen) * ( max - min ) ) : 0 );
+    return min + ( min != max ? ( float(sliderPos - sliderMin) / float(sliderLen) * ( max - min ) ) : 0 );
 }
 
 QSize FloatSlider::sizeHint() const
 {
-	QStyleOptionSlider opt = getStyleOption();
-	int w = style()->pixelMetric( QStyle::PM_SliderThickness, &opt, this );
-	int h = 84;
+    QStyleOptionSlider opt = getStyleOption();
+    int w = style()->pixelMetric( QStyle::PM_SliderThickness, &opt, this );
+    int h = 84;
 
-	if ( ori == Qt::Horizontal ) {
-		// Minimum size for clipping issues in Fusion theme
-		int x = std::max( w, 24 );
-		w = h;
-		h = x;
-	}
+    if ( ori == Qt::Horizontal ) {
+        // Minimum size for clipping issues in Fusion theme
+        int x = std::max( w, 24 );
+        w = h;
+        h = x;
+    }
 
-	return QSize( w, h );
-	//return style()->sizeFromContents( QStyle::CT_Slider, &opt, QSize( w, h ), this ).expandedTo( QApplication::globalStrut() );
+    return QSize( w, h );
+    //return style()->sizeFromContents( QStyle::CT_Slider, &opt, QSize( w, h ), this ).expandedTo( QApplication::globalStrut() );
 }
 
 QSize FloatSlider::minimumSizeHint() const
 {
-	QSize s = sizeHint();
-	QStyleOptionSlider opt = getStyleOption();
-	int length = style()->pixelMetric( QStyle::PM_SliderLength, &opt, this );
+    QSize s = sizeHint();
+    QStyleOptionSlider opt = getStyleOption();
+    int length = style()->pixelMetric( QStyle::PM_SliderLength, &opt, this );
 
-	if ( ori == Qt::Horizontal )
-		s.setWidth( length );
-	else
-		s.setHeight( length );
+    if ( ori == Qt::Horizontal )
+        s.setWidth( length );
+    else
+        s.setHeight( length );
 
-	return s;
+    return s;
 }
 
 AlphaSlider::AlphaSlider( Qt::Orientation o )
-	: FloatSlider( o )
+    : FloatSlider( o )
 {
-	setRange( 0, 1.0 );
-	setValue( 1.0 );
+    setRange( 0, 1.0 );
+    setValue( 1.0 );
 }
 
 QSize AlphaSlider::sizeHint() const
 {
-	return FloatSlider::sizeHint() * 1.0;
+    return FloatSlider::sizeHint() * 1.0;
 }
 
 void AlphaSlider::setColor( const QColor & c )
 {
-	color0 = c;
-	color1 = c;
-	color0.setAlphaF( 0.0 );
-	color1.setAlphaF( 1.0 );
-	setValue( c.alphaF() );
+    color0 = c;
+    color1 = c;
+    color0.setAlphaF( 0.0 );
+    color1.setAlphaF( 1.0 );
+    setValue( c.alphaF() );
 
-	update();
+    update();
 }
 
 void AlphaSlider::paintEvent( QPaintEvent * e )
 {
-	int w2 = width() / 2;
-	int h2 = height() / 2;
+    int w2 = width() / 2;
+    int h2 = height() / 2;
 
-	QPoint points[2];
+    QPoint points[2];
 
-	if ( orientation() == Qt::Vertical ) {
-		points[0] = QPoint( w2, height() );
-		points[1] = QPoint( w2, 0 );
-	} else {
-		points[0] = QPoint( 0, h2 );
-		points[1] = QPoint( width(), h2 );
-	}
+    if ( orientation() == Qt::Vertical ) {
+        points[0] = QPoint( w2, height() );
+        points[1] = QPoint( w2, 0 );
+    } else {
+        points[0] = QPoint( 0, h2 );
+        points[1] = QPoint( width(), h2 );
+    }
 
-	QLinearGradient agrad = QLinearGradient( points[0], points[1] );
-	agrad.setColorAt( 0.0, color0 );
-	agrad.setColorAt( 1.0, color1 );
+    QLinearGradient agrad = QLinearGradient( points[0], points[1] );
+    agrad.setColorAt( 0.0, color0 );
+    agrad.setColorAt( 1.0, color1 );
 
-	QPainter p;
-	p.begin( this );
-	p.fillRect( rect(), agrad );
-	p.end();
+    QPainter p;
+    p.begin( this );
+    p.fillRect( rect(), agrad );
+    p.end();
 
-	FloatSlider::paintEvent( e );
+    FloatSlider::paintEvent( e );
 }
 
