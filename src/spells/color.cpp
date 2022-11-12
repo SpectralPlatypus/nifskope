@@ -171,10 +171,13 @@ public:
             auto searchColor = colors[idx];
             Color3 repl = Color3{pick};
             for(int i = 0; i < colors.size(); ++i)
+            {
                 if(colors[i] == searchColor)
                 {
                     colors[i] = repl;
                 }
+            }
+
             nif->setArray<Color3>(index, colors);
         }
         else if ( typ == NifValue::tColor4 )
@@ -194,9 +197,9 @@ public:
                 {
                     colors[i] = repl;
                 }
-                nif->setArray<Color4>(index, colors);
             }
 
+            nif->setArray<Color4>(index, colors);
         }
 
         return index;
