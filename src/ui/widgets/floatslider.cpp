@@ -244,7 +244,7 @@ QStyleOptionSlider FloatSlider::getStyleOption() const
     opt.orientation = ori;
     opt.pageStep = 10;
     opt.singleStep  = 1;
-    opt.sliderValue = ( max != min ) ? int(1.0f * ( val - min ) / ( max - min ) * opt.maximum) : 0;
+    opt.sliderValue = ( max != min ) ? int(1.0f * ( val - min ) / ( max - min ) * opt.maximum) - ((ori == Qt::Horizontal) ? 1 : 0) : 0;
     opt.sliderPosition = opt.sliderValue;
     opt.tickPosition = QSlider::NoTicks;
     opt.direction = Qt::LeftToRight;
