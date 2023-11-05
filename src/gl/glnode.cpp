@@ -853,8 +853,15 @@ void drawHvkShape( const NifModel * nif, const QModelIndex & iShape, QStack<QMod
 			glColor4ubv( (GLubyte *)&s_nodeId );
 		}
 
-		drawCapsule( nif->get<Vector3>( iShape, "First Point" ) * havokScale, nif->get<Vector3>( iShape, "Second Point" ) * havokScale, nif->get<float>( iShape, "Radius" ) * havokScale );
-	} else if ( name == "bhkNiTriStripsShape" ) {
+        drawCapsule( nif->get<Vector3>( iShape, "First Point" ) * havokScale, nif->get<Vector3>( iShape, "Second Point" ) * havokScale, nif->get<float>( iShape, "Radius" ) * havokScale );
+    } else if (name == "bhkCylinderShape") {
+        if(Node::SELECTING) {
+            int s_nodeId = ID2COLORKEY(nif->getBlockNumber(iShape));
+            glColor4ubv( (GLubyte *)&s_nodeId);
+        }
+
+        drawCylinder(Vector3( nif->get<Vector4>( iShape, "Vertex A" ) ), Vector3( nif->get<Vector4>( iShape, "Vertex B" ) ), nif->get<float>( iShape, "Cylinder Radius" ) );
+    } else if ( name == "bhkNiTriStripsShape" ) {
 		glPushMatrix();
 		float s = 1.0f / 7.0f;
 		glScalef( s, s, s );

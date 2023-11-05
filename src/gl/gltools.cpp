@@ -747,6 +747,63 @@ void drawCapsule( const Vector3 & a, const Vector3 & b, float r, int sd )
 	}
 }
 
+
+void drawCylinder( const Vector3 & a, const Vector3 & b, float r, int sd )
+{
+    Vector3 d = b - a;
+
+    if ( d.length() < 0.001 ) {
+        drawSphere( a, r );
+        return;
+    }
+
+    Vector3 n = d;
+    n.normalize();
+
+    Vector3 x( n[ 1 ], n[ 2 ], n[ 0 ] );
+    Vector3 y = Vector3::crossproduct( n, x );
+    x = Vector3::crossproduct( n, y );
+
+    x *= r;
+    y *= r;
+
+    //Render mid-line
+    glBegin( GL_LINE_STRIP );
+
+    for ( int i = 0; i <= sd * 2; i++ )
+        glVertex( a + d / 2 + x * sin( PI / sd * i ) + y * cos( PI / sd * i ) );
+
+    glEnd();
+    //Render connecting lines
+    glBegin( GL_LINES );
+
+    for ( int i = 0; i <= sd * 2; i++ ) {
+        glVertex( a + x * sin( PI / sd * i ) + y * cos( PI / sd * i ) );
+        glVertex( b + x * sin( PI / sd * i ) + y * cos( PI / sd * i ) );
+    }
+
+    glEnd();
+
+    //Render end lines
+    for ( int j = 0; j <= sd; j++ ) {
+        //float f = PI * float( j ) / float( sd * 2 );
+
+        glBegin( GL_LINE_STRIP );
+
+        for ( int i = 0; i <= sd * 2; i++ )
+            glVertex( a  + x * sin( PI / sd * i ) + y * cos( PI / sd * i ) );
+
+        glEnd();
+        //Render rear face
+        glBegin( GL_LINE_STRIP );
+
+        for ( int i = 0; i <= sd * 2; i++ )
+            glVertex( b + x * sin( PI / sd * i ) + y * cos( PI / sd * i ) );
+
+        glEnd();
+    }
+}
+
 void drawDashLine( const Vector3 & a, const Vector3 & b, int sd )
 {
 	Vector3 d = ( b - a ) / float(sd);
