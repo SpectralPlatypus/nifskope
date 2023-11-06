@@ -333,14 +333,8 @@ qhull {
 }
 
 v-hacd {
-    INCLUDEPATH += \
-        lib/v-hacd/src/VHACD_Lib/inc  \
-        lib/v-hacd/src/VHACD_Lib/public
-    HEADERS += lib/v-hacd/src/VHACD_Lib/public/VHACD.h
-    HEADERS += $$files($$PWD/lib/v-hacd/src/VHACD_Lib/inc/*.h, false)
-    HEADERS += $$files($$PWD/lib/v-hacd/src/VHACD_Lib/inc/*.inl, false)
-    SOURCES += $$files($$PWD/lib/v-hacd/src/VHACD_Lib/src/*.cpp, false)
-    SOURCES += $$files($$PWD/lib/v-hacd/src/VHACD_Lib/src/*.inl, false)
+    INCLUDEPATH += lib/v-hacd/include
+    HEADERS += lib/v-hacd/include/VHACD.h
 }
 
 gli {
@@ -553,7 +547,3 @@ buildMessages:build_pass|buildMessages:!debug_and_release {
 
 # vim: set filetype=config : 
 
-DISTFILES += \
-    lib/v-hacd/src/VHACD_Lib/CMakeLists.txt \
-    lib/v-hacd/src/VHACD_Lib/cl/vhacdKernels.cl \
-    lib/v-hacd/src/VHACD_Lib/cmake/vhacd-config.cmake

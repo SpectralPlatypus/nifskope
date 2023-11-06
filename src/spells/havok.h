@@ -2,11 +2,8 @@
 #define HAVOK_H
 
 #include <QDialog> // Inherited
+
 #include <QPersistentModelIndex>
-#include "v-hacd/src/VHACD_Lib/public/VHACD.h"
-
-
-//! \file havok.h VHacdDialog
 
 class NifModel;
 
@@ -25,30 +22,45 @@ public:
     struct DialValues
     {
     public:
-        VHACD::IVHACD::Parameters params;
+        enum FillMethod : uint8_t
+        {
+            FloodFill,
+            Surface,
+            Raycast,
+        };
+        uint32_t resolution;
+        uint32_t maxConvexHulls;
+        uint32_t maxNumVerticesPerCH;
+        FillMethod fillMethod;
+        double minimumVolumePercentErrorAllowed;
+
         int matlsIndex;
 
-        DialValues(int res, double con, int vpch, int matlsIdx) :
-            params(),
+        DialValues(uint32_t res, uint32_t convexHulls, double error, uint32_t vpch, int matlsIdx, FillMethod fill = FillMethod::FloodFill) :
+            resolution(res),
+            maxConvexHulls(convexHulls),
+            maxNumVerticesPerCH(vpch),
+            fillMethod(fill),
+            minimumVolumePercentErrorAllowed(error),
             matlsIndex(matlsIdx)
         {
-            params.m_resolution = res;
-            params.m_concavity = con;
-            params.m_planeDownsampling = 4;
-            params.m_convexhullDownsampling = 8;
-            params.m_maxNumVerticesPerCH = vpch;
         }
     };
+
     //! Constructor. Sets widgets and layout.
     VHacdDialog(QWidget * parent = nullptr );
 
 protected:
     //! Resolution
     QSpinBox * paramRes;
-    //! Model used
-    QDoubleSpinBox * paramConcav;
-    //! Index of the string palette
+    //! Min Volume Percent Error Allowed
+    QDoubleSpinBox * paramErr;
+    //! Max number of convex hulls to produce
+    QSpinBox* paramMaxch;
+    //! Max number of vertices per convex hull
     QSpinBox* paramVpch;
+    //! Lists fill methods
+    QComboBox* paramFill;
     //! Lists the strings in the palette
     QComboBox * paramMatls;
 

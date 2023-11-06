@@ -6,7 +6,9 @@
 
 #include "lib/nvtristripwrapper.h"
 #include "lib/qhull.h"
-#include "v-hacd/src/VHACD_Lib/public/VHACD.h"
+
+#define ENABLE_VHACD_IMPLEMENTATION 1
+#include "VHACD.h"
 
 #include <QDialog>
 #include <QDoubleSpinBox>
@@ -26,6 +28,7 @@
  *
  * All classes here inherit from the Spell class.
  */
+
 
 //! For Havok coordinate transforms
 static const float havokConst = 7.0;
@@ -759,7 +762,7 @@ public:
     QString page() const override final { return Spell::tr( "Havok" ); }
 
     spCreateHACD() :
-        dialValues (100000, 0.0025, 8, 4)
+        dialValues (400000, 16, 0.1, 16, 4)
     {
     }
 
@@ -811,14 +814,15 @@ public:
 
         QVector<Triangle> tris = nif->getArray<Triangle>(iData, "Triangles");
         QVector<uint32_t> triangles;
-
         // Offset by translation of NiTriShape
         Vector3 trans = nif->get<Vector3>( index, "Translation" );
+        //Scale
+        float triShapeScale = nif->get<float>(index, "Scale");
         for ( auto v : verts ) {
             vertsTrans.append( v + trans );
-            points.append(v[0] + trans[0]);
-            points.append(v[1] + trans[1]);
-            points.append(v[2] + trans[2]);
+            points.append(v[0] * triShapeScale + trans[0]);
+            points.append(v[1] * triShapeScale + trans[1]);
+            points.append(v[2] * triShapeScale + trans[2]);
         }
 
         // Add triangles
@@ -830,9 +834,21 @@ public:
         }
 
         VHACD::IVHACD* interfaceVHACD = VHACD::CreateVHACD();
+        VHACD::IVHACD::Parameters params {
+            .m_maxConvexHulls = dialValues.maxConvexHulls,
+            .m_resolution = dialValues.resolution,
+            .m_minimumVolumePercentErrorAllowed = dialValues.minimumVolumePercentErrorAllowed,
+            .m_maxNumVerticesPerCH = dialValues.maxNumVerticesPerCH,
+        };
+
+        switch(dialValues.fillMethod){
+            case VHacdDialog::DialValues::FillMethod::FloodFill: params.m_fillMode = VHACD::FillMode::FLOOD_FILL; break;
+            case VHacdDialog::DialValues::FillMethod::Surface: params.m_fillMode = VHACD::FillMode::SURFACE_ONLY; break;
+            case VHacdDialog::DialValues::FillMethod::Raycast: params.m_fillMode = VHACD::FillMode::RAYCAST_FILL; break;
+       }
 
         bool res = interfaceVHACD->Compute(&points[0], (unsigned int)points.size() / 3,
-                (const uint32_t *)&triangles[0], (unsigned int)triangles.size() / 3, dialValues.params);
+                (const uint32_t *)&triangles[0], (unsigned int)triangles.size() / 3, params);
 
         if (!res)
         {
@@ -855,21 +871,21 @@ public:
             VHACD::IVHACD::ConvexHull ch;
             interfaceVHACD->GetConvexHull(p, ch);
             // Get points
-            for (uint32_t i = 0; i < ch.m_nPoints; i++) {
+            for (const auto& vec : ch.m_points) {
                 Vector4 v;
-                v[0] = ch.m_points[3 * i];
-                v[1] = ch.m_points[3 * i + 1];
-                v[2] = ch.m_points[3 * i + 2];
+                v[0] = vec[0];
+                v[1] = vec[1];
+                v[2] = vec[2];
                 v /= havokScale;
                 hullVerts.append(v);
             }
 
             TheMoppet.AddVertex(hullVerts);
-            for (uint32_t i = 0; i < ch.m_nTriangles; i++) {
+            for (const auto& tri : ch.m_triangles) {
                 Triangle t {
-                    (quint16)ch.m_triangles[3 * i],
-                            (quint16)ch.m_triangles[3 * i + 1],
-                            (quint16)ch.m_triangles[3 * i + 2]
+                    (quint16)tri.mI0,
+                            (quint16)tri.mI1,
+                            (quint16)tri.mI2
                 };
 
 
@@ -1023,7 +1039,7 @@ public:
     QString page() const override final { return Spell::tr( "Havok" ); }
 
     spCreateCombinedHACD() :
-        dialValues (100000, 0.0025, 8, 4)
+        dialValues (400000, 16, 0.1, 8, 4)
     {
     }
 
@@ -1097,9 +1113,15 @@ public:
 //------------------------------------------------------
 
         VHACD::IVHACD* interfaceVHACD = VHACD::CreateVHACD();
+        VHACD::IVHACD::Parameters params {
+        .m_maxConvexHulls = dialValues.maxConvexHulls,
+        .m_resolution = dialValues.resolution,
+        .m_minimumVolumePercentErrorAllowed = dialValues.minimumVolumePercentErrorAllowed,
+        .m_maxNumVerticesPerCH = dialValues.maxNumVerticesPerCH,
+        };
 
         bool res = interfaceVHACD->Compute(&points[0], (unsigned int)points.size() / 3,
-                (const uint32_t *)&triangles[0], (unsigned int)triangles.size() / 3, dialValues.params);
+                (const uint32_t *)&triangles[0], (unsigned int)triangles.size() / 3, params);
 
         if (!res)
         {
@@ -1116,30 +1138,30 @@ public:
         enumVal = NifValue::enumOptionValue("SkyrimHavokMaterial", matlsStrings.at(dialValues.matlsIndex), &ok);
         if(!ok) enumVal = 0;
 
+
         for (unsigned int p = 0; p < interfaceVHACD->GetNConvexHulls(); ++p)
         {
             QVector<Vector4> hullVerts;
             QVector<Vector4> hullNorms;
             VHACD::IVHACD::ConvexHull ch;
             interfaceVHACD->GetConvexHull(p, ch);
-            // Get points
-            for (uint32_t i = 0; i < ch.m_nPoints; i++) {
+
+            for (const auto& vec : ch.m_points) {
                 Vector4 v;
-                v[0] = ch.m_points[3 * i];
-                v[1] = ch.m_points[3 * i + 1];
-                v[2] = ch.m_points[3 * i + 2];
+                v[0] = vec[0];
+                v[1] = vec[1];
+                v[2] = vec[2];
                 v /= havokScale;
                 hullVerts.append(v);
             }
 
             TheMoppet.AddVertex(hullVerts);
-            for (uint32_t i = 0; i < ch.m_nTriangles; i++) {
+            for (const auto& tri : ch.m_triangles) {
                 Triangle t {
-                    (quint16)ch.m_triangles[3 * i],
-                            (quint16)ch.m_triangles[3 * i + 1],
-                            (quint16)ch.m_triangles[3 * i + 2]
+                    (quint16)tri.mI0,
+                    (quint16)tri.mI1,
+                    (quint16)tri.mI2
                 };
-
 
                 Vector3 u {hullVerts[t[1]] - hullVerts[t[0]]};
                 Vector3 v {hullVerts[t[2]] - hullVerts[t[0]]};
@@ -1323,24 +1345,38 @@ VHacdDialog::VHacdDialog(QWidget * parent): QDialog(parent)
     paramRes->setSingleStep(100000);
     vbox->addWidget(paramRes);
 
-    vbox->addWidget( new QLabel( Spell::tr( "Concavity" ) ) );
+    vbox->addWidget( new QLabel( Spell::tr( "Min Volume Percent Error Allowed" ) ) );
 
-    paramConcav = new QDoubleSpinBox();
-    paramConcav->setRange( 0, 1.0 );
-    paramConcav->setDecimals( 4 );
-    paramConcav->setSingleStep( 0.01 );
-    vbox->addWidget( paramConcav );
+    paramErr = new QDoubleSpinBox();
+    paramErr->setRange( 0.001, 10.0 );
+    paramErr->setDecimals( 3 );
+    paramErr->setSingleStep( 0.01 );
+    vbox->addWidget( paramErr );
 
-    vbox->addWidget( new QLabel( Spell::tr( "verticesPerCH" ) ) );
+    vbox->addWidget( new QLabel( Spell::tr( "Nax Number of Convex Hulls" ) ) );
+
+    paramMaxch = new QSpinBox;
+    paramMaxch->setRange(1, 100000);
+    paramMaxch->setSingleStep(1);
+    vbox->addWidget(paramMaxch);
+
+    vbox->addWidget( new QLabel( Spell::tr( "Max Number of Hull Vertices" ) ) );
 
     paramVpch = new QSpinBox;
-    paramVpch->setRange(8, 1024);
+    paramVpch->setRange(8, 2048);
     paramVpch->setSingleStep(1);
     vbox->addWidget(paramVpch);
 
+    vbox->addWidget( new QLabel( Spell::tr( "Fill Method" ) ) );
+
+    auto strings = QStringList{"Floodfill", "Surface", "Raycast"};
+    paramFill = new QComboBox();
+    paramFill->addItems(strings);
+    vbox->addWidget(paramFill);
+
     vbox->addWidget( new QLabel( Spell::tr( "Material" ) ) );
 
-    auto strings = NifValue::enumOptions("SkyrimHavokMaterial");
+    strings = NifValue::enumOptions("SkyrimHavokMaterial");
     paramMatls = new QComboBox();
     paramMatls->addItems(strings);
     vbox->addWidget(paramMatls);
@@ -1360,18 +1396,31 @@ VHacdDialog::VHacdDialog(QWidget * parent): QDialog(parent)
     QObject::connect( cancel, &QPushButton::clicked, this, &VHacdDialog::reject );
 }
 
-void VHacdDialog::setParams(const VHacdDialog::DialValues values)
+void VHacdDialog::setParams(const DialValues values)
 {
-    paramRes->setValue(values.params.m_resolution);
-    paramConcav->setValue( values.params.m_concavity);
-    paramVpch->setValue(values.params.m_maxNumVerticesPerCH);
+    paramRes->setValue(values.resolution);
+    paramMaxch->setValue(values.maxConvexHulls);
+    paramErr->setValue(values.minimumVolumePercentErrorAllowed);
+    paramVpch->setValue(values.maxNumVerticesPerCH);
+    paramFill->setCurrentIndex(static_cast<uint8_t>(values.fillMethod));
     paramMatls->setCurrentIndex(values.matlsIndex);
 }
 
 VHacdDialog::DialValues VHacdDialog::getParams()
 {
-    VHacdDialog::DialValues retVal{paramRes->value(), paramConcav->value(),paramVpch->value(),paramMatls->currentIndex()};
+    auto method = static_cast<DialValues::FillMethod>(paramFill->currentIndex());
+    DialValues retVal{(uint32_t)paramRes->value(),
+                      (uint32_t)paramMaxch->value(),
+                      paramErr->value(),
+                      (uint32_t)paramVpch->value(),
+                      paramMatls->currentIndex(),
+                      method
+
+    };
+
     return retVal;
 }
+
+
 
 #endif
