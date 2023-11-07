@@ -18,6 +18,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QComboBox>
+#include <QCheckBox>
 
 #include <algorithm> // std::sort
 #include <optional> // std::optional
@@ -762,7 +763,7 @@ public:
     QString page() const override final { return Spell::tr( "Havok" ); }
 
     spCreateHACD() :
-        dialValues (400000, 16, 0.1, 16, 4)
+        dialValues (400000, 16, 0.01, 16, false, 4)
     {
     }
 
@@ -969,19 +970,19 @@ public:
             nif->setLink( rigidBodyLink, nif->getBlockNumber( rigidBody ) );
         }
 
-        enumVal = NifValue::enumOptionValue("SkyrimLayer", "SKYL_CLUTTER", &ok);
+        enumVal = NifValue::enumOptionValue("SkyrimLayer", dialValues.staticCollision ? "SKYL_STATIC" : "SKYL_CLUTTER", &ok);
         if(ok) nif->set<quint8>(rigidBody, "Layer", enumVal);
 
-        nif->set<quint8>(rigidBody, "Flags and Part Number", 128);
+        //nif->set<quint8>(rigidBody, "Flags and Part Number", 128);
         nif->set<ushort>(rigidBody, "Process Contact Callback Delay", 65535);
 
-        enumVal = NifValue::enumOptionValue("hkMotionType", "MO_SYS_SPHERE_STABILIZED", &ok);
+        enumVal = NifValue::enumOptionValue("hkMotionType", dialValues.staticCollision ? "MO_SYS_FIXED": "MO_SYS_SPHERE_STABILIZED", &ok);
         if(ok) nif->set<quint8>(rigidBody, "Motion System", enumVal);
 
-        enumVal = NifValue::enumOptionValue("hkQualityType", "MO_QUAL_MOVING", &ok);
+        enumVal = NifValue::enumOptionValue("hkQualityType", dialValues.staticCollision ? "MO_QUAL_INVALID" : "MO_QUAL_MOVING", &ok);
         if(ok) nif->set<quint8>(rigidBody, "Quality Type", enumVal); //MO_QUAL_MOVING
 
-        enumVal = NifValue::enumOptionValue("hkSolverDeactivation", "SOLVER_DEACTIVATION_LOW", &ok);
+        enumVal = NifValue::enumOptionValue("hkSolverDeactivation",dialValues.staticCollision ? "SOLVER_DEACTIVATION_OFF" : "SOLVER_DEACTIVATION_LOW", &ok);
         if(ok) nif->set<quint8>(rigidBody, "Solver Deactivation", enumVal); //SOLVER_DEACTIVATION_LOW
 
         QModelIndex shapeLink = nif->getIndex( rigidBody, "Shape" );
@@ -1039,7 +1040,7 @@ public:
     QString page() const override final { return Spell::tr( "Havok" ); }
 
     spCreateCombinedHACD() :
-        dialValues (400000, 16, 0.1, 8, 4)
+        dialValues (400000, 16, 0.01, 16, false, 4)
     {
     }
 
@@ -1242,19 +1243,19 @@ public:
             nif->setLink( rigidBodyLink, nif->getBlockNumber( rigidBody ) );
         }
 
-        enumVal = NifValue::enumOptionValue("SkyrimLayer", "SKYL_CLUTTER", &ok);
+        enumVal = NifValue::enumOptionValue("SkyrimLayer", dialValues.staticCollision ? "SKYL_STATIC" : "SKYL_CLUTTER", &ok);
         if(ok) nif->set<quint8>(rigidBody, "Layer", enumVal);
 
-        nif->set<quint8>(rigidBody, "Flags and Part Number", 128);
+        //nif->set<quint8>(rigidBody, "Flags and Part Number", 128);
         nif->set<ushort>(rigidBody, "Process Contact Callback Delay", 65535);
 
-        enumVal = NifValue::enumOptionValue("hkMotionType", "MO_SYS_SPHERE_STABILIZED", &ok);
+        enumVal = NifValue::enumOptionValue("hkMotionType", dialValues.staticCollision ? "MO_SYS_FIXED": "MO_SYS_SPHERE_STABILIZED", &ok);
         if(ok) nif->set<quint8>(rigidBody, "Motion System", enumVal);
 
-        enumVal = NifValue::enumOptionValue("hkQualityType", "MO_QUAL_MOVING", &ok);
+        enumVal = NifValue::enumOptionValue("hkQualityType", dialValues.staticCollision ? "MO_QUAL_INVALID" : "MO_QUAL_MOVING", &ok);
         if(ok) nif->set<quint8>(rigidBody, "Quality Type", enumVal); //MO_QUAL_MOVING
 
-        enumVal = NifValue::enumOptionValue("hkSolverDeactivation", "SOLVER_DEACTIVATION_LOW", &ok);
+        enumVal = NifValue::enumOptionValue("hkSolverDeactivation",dialValues.staticCollision ? "SOLVER_DEACTIVATION_OFF" : "SOLVER_DEACTIVATION_LOW", &ok);
         if(ok) nif->set<quint8>(rigidBody, "Solver Deactivation", enumVal); //SOLVER_DEACTIVATION_LOW
 
         QModelIndex shapeLink = nif->getIndex( rigidBody, "Shape" );
@@ -1381,6 +1382,12 @@ VHacdDialog::VHacdDialog(QWidget * parent): QDialog(parent)
     paramMatls->addItems(strings);
     vbox->addWidget(paramMatls);
 
+    //vbox->addWidget( new QLabel( Spell::tr( "Static Object" ) ) );
+
+    paramStatic = new QCheckBox("Static Object");
+    paramStatic->setChecked(false);
+    vbox->addWidget(paramStatic);
+
     QHBoxLayout * hbox = new QHBoxLayout;
     vbox->addLayout( hbox );
 
@@ -1403,6 +1410,7 @@ void VHacdDialog::setParams(const DialValues values)
     paramErr->setValue(values.minimumVolumePercentErrorAllowed);
     paramVpch->setValue(values.maxNumVerticesPerCH);
     paramFill->setCurrentIndex(static_cast<uint8_t>(values.fillMethod));
+    paramStatic->setChecked(values.staticCollision);
     paramMatls->setCurrentIndex(values.matlsIndex);
 }
 
@@ -1412,8 +1420,10 @@ VHacdDialog::DialValues VHacdDialog::getParams()
     DialValues retVal{(uint32_t)paramRes->value(),
                       (uint32_t)paramMaxch->value(),
                       paramErr->value(),
+
                       (uint32_t)paramVpch->value(),
                       paramMatls->currentIndex(),
+                      paramStatic->isChecked(),
                       method
 
     };

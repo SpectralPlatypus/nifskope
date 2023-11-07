@@ -12,6 +12,7 @@ class QSpinBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QVBoxLayout;
+class QCheckBox;
 
 //! String palette QRegularExpression dialog for spEditStringEntries
 class VHacdDialog final : public QDialog
@@ -32,15 +33,17 @@ public:
         uint32_t maxConvexHulls;
         uint32_t maxNumVerticesPerCH;
         FillMethod fillMethod;
+        bool staticCollision;
         double minimumVolumePercentErrorAllowed;
 
         int matlsIndex;
 
-        DialValues(uint32_t res, uint32_t convexHulls, double error, uint32_t vpch, int matlsIdx, FillMethod fill = FillMethod::FloodFill) :
+        DialValues(uint32_t res, uint32_t convexHulls, double error, uint32_t vpch, int matlsIdx, bool staticColl, FillMethod fill = FillMethod::FloodFill) :
             resolution(res),
             maxConvexHulls(convexHulls),
             maxNumVerticesPerCH(vpch),
             fillMethod(fill),
+            staticCollision(staticColl),
             minimumVolumePercentErrorAllowed(error),
             matlsIndex(matlsIdx)
         {
@@ -63,6 +66,8 @@ protected:
     QComboBox* paramFill;
     //! Lists the strings in the palette
     QComboBox * paramMatls;
+    //! Static (furniture) or dynamic object (clutter)
+    QCheckBox * paramStatic;
 
 public slots:
     //! Set the string palette entries
